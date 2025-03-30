@@ -2,14 +2,14 @@ import transformers
 import torch
 
 class Llama3:
-  def __init__(self):
+  def __init__(self, device=torch.device("cuda:0")):
     # model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
     model_id = "meta-llama/Llama-3.2-3B-Instruct"
     self.pipeline = transformers.pipeline(
         "text-generation",
         model=model_id,
         model_kwargs={"torch_dtype": torch.bfloat16},
-        device="cuda:3",
+        device=device,
     )
     self.terminators = [
         self.pipeline.tokenizer.eos_token_id,
