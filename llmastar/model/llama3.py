@@ -3,7 +3,8 @@ import torch
 
 class Llama3:
   def __init__(self):
-    model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
+    # model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
+    model_id = "meta-llama/Llama-3.2-3B-Instruct"
     self.pipeline = transformers.pipeline(
         "text-generation",
         model=model_id,
