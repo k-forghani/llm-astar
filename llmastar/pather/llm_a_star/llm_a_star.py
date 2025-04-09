@@ -4,7 +4,7 @@ import heapq
 # import torch
 
 from llmastar.env.search import env, plotting
-from llmastar.model import ChatGPT, Llama3
+from llmastar.model import ChatGPT, Llama3,mistral
 from llmastar.utils import is_lines_collision, list_parse
 from .prompt import *
 
@@ -22,9 +22,11 @@ class LLMAStar:
             self.parser = ChatGPT(method=self.GPT_METHOD, sysprompt=sysprompt_parse, example=example_parse)
             self.model = ChatGPT(method=self.GPT_LLMASTAR_METHOD, sysprompt="", example=None)
         elif self.llm == 'llama':
-            self.model = Llama3(device=device)
+            self.model = Llama3(device=device) 
+        elif self.llm == 'mistral':
+            self.model = Mistral()
         else:
-            raise ValueError("Invalid LLM model. Choose 'gpt' or 'llama'.")
+            raise ValueError("Invalid LLM model. Choose 'gpt', 'llama', or 'mistral'.")
         
         assert prompt in ['standard', 'cot', 'repe'], "Invalid prompt type. Choose 'standard', 'cot', or 'repe'."
         self.prompt = prompt
@@ -40,6 +42,9 @@ class LLMAStar:
                 response = self.model.ask(parse_llama.format(query=query))
                 print(response)
                 return json.loads(response)
+            elif self.llm == 'mistral':
+                response = self.model.ask(parse_llama.format(query=query))
+                print(response)
             else:
                 raise ValueError("Invalid LLM model.")
         return query
@@ -73,6 +78,8 @@ class LLMAStar:
             response = self.model.ask(prompt=query, max_tokens=1000)
         elif self.llm == 'llama':
             response = self.model.ask(prompt=query)
+        elif self.llm == 'mistral':
+            response = self.model.ask(prompt=query)
         else:
             raise ValueError("Invalid LLM model.")
 
@@ -95,6 +102,11 @@ class LLMAStar:
                                 horizontal_barriers=self.horizontal_barriers,
                                 vertical_barriers=self.vertical_barriers)
         elif self.llm == 'llama':
+            return llama_prompt[self.prompt].format(start=start, goal=goal,
+                                    horizontal_barriers=self.horizontal_barriers,
+                                    vertical_barriers=self.vertical_barriers)
+
+        elif self.llm == 'mistral':
             return llama_prompt[self.prompt].format(start=start, goal=goal,
                                     horizontal_barriers=self.horizontal_barriers,
                                     vertical_barriers=self.vertical_barriers)
