@@ -2,7 +2,7 @@ import json
 import math
 import heapq
 import random
-# import torch
+import torch
 
 from llmastar.env.search import env, plotting
 from llmastar.model import ChatGPT, Llama3
