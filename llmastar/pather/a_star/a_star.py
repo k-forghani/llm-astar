@@ -1,4 +1,3 @@
-
 import math
 import heapq
 
@@ -70,7 +69,7 @@ class AStar:
         result = {"operation": count, "storage": len(self.g), "length": sum(self._euclidean_distance(path[i], path[i+1]) for i in range(len(path)-1))} 
         print(result)
         self.plot.animation(path, visited, True, "A*", self.filepath)
-        return result
+        return result | {"path": path, "visited": visited}, False
     
     @staticmethod
     def _euclidean_distance(p1, p2):

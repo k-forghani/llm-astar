@@ -1,7 +1,7 @@
 import json
 import math
 import heapq
-import torch
+# import torch
 
 from llmastar.env.search import env, plotting
 from llmastar.model import ChatGPT, Llama3
@@ -14,7 +14,9 @@ class LLMAStar:
     GPT_METHOD = "PARSE"
     GPT_LLMASTAR_METHOD = "LLM-A*"
 
-    def __init__(self, llm='gpt', prompt='standard', device=torch.device("cuda:0")):
+    def __init__(self, llm='gpt', prompt='standard', device=None):
+        if device is None:
+            device=torch.device("cuda:0")
         self.llm = llm
         if self.llm == 'gpt':
             self.parser = ChatGPT(method=self.GPT_METHOD, sysprompt=sysprompt_parse, example=example_parse)

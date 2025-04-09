@@ -1,8 +1,10 @@
 import transformers
-import torch
+# import torch
 
 class Llama3:
-  def __init__(self, device=torch.device("cuda:0")):
+  def __init__(self, device=None):
+    if device is None:
+      device = torch.device("cuda:0")
     # model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
     model_id = "meta-llama/Llama-3.2-3B-Instruct"
     self.pipeline = transformers.pipeline(

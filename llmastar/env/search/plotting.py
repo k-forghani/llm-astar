@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 
 from .env import *
 
+plt.pause = lambda x: None
 
 class Plotting:
     def __init__(self, xI, xG, env):
@@ -101,9 +102,9 @@ class Plotting:
             #
             # length = 15
 
-            if count % length == 0:
-                plt.pause(0.001)
-        plt.pause(0.01)
+            # if count % length == 0:
+            #     plt.pause(0.001)
+        # plt.pause(0.01)
 
     def plot_path(self, path, cl='r', flag=False):
         path_x = [path[i][0] for i in range(len(path))]
@@ -117,7 +118,7 @@ class Plotting:
         plt.plot(self.xI[0], self.xI[1], "bs")
         plt.plot(self.xG[0], self.xG[1], "gs")
 
-        plt.pause(0.01)
+        # plt.pause(0.01)
 
     def plot_visited_bi(self, v_fore, v_back):
         if self.xI in v_fore:
