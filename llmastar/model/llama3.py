@@ -1,5 +1,5 @@
 import transformers
-# import torch
+import torch
 
 class Llama3:
   def __init__(self, device=None):
