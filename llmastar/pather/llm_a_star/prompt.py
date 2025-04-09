@@ -382,6 +382,138 @@ Vertical Barriers: {vertical_barriers}
 <|start_header_id|>assistant<|end_header_id|>
 """
 
-gpt_prompt = {'standard': standard_gpt,'cot': cot_gpt, 'repe': repe_gpt}
+# RAG-specific prompts
+standard_gpt_rag = """
+You are provided with a barrier description based on a similar pathfinding problem:
+{retrieved_barrier}
+
+Additionally, you have an example of a successful path for navigating around similar barriers:
+{retrieved_path}
+
+Identify a path between the start and goal points to navigate around obstacles and find the shortest path to the goal. 
+Horizontal barriers are represented as [y, x_start, x_end], and vertical barriers are represented as [x, y_start, y_end].
+Conclude your response with the generated path in the format "Generated Path: [[x1, y1], [x2, y2], ...]".
+
+Start Point: {start}
+Goal Point: {goal}
+Horizontal Barriers: {horizontal_barriers}
+Vertical Barriers: {vertical_barriers}
+Generated Path: 
+"""
+
+standard_llama_rag = """
+<|begin_of_text|>
+<|start_header_id|>system<|end_header_id|>
+You are provided with a barrier description based on a similar pathfinding problem:
+{retrieved_barrier}
+
+Additionally, you have an example of a successful path for navigating around similar barriers:
+{retrieved_path}
+
+You need to find the shortest path between the start and goal points that navigates around barriers. 
+Horizontal barriers are represented as [y, x_start, x_end], and vertical barriers are represented as [x, y_start, y_end].
+Conclude your response with the generated path in the format "Generated Path: [[x1, y1], [x2, y2], ...]".
+<|eot_id|>
+<|start_header_id|>user<|end_header_id|>
+Start Point: {start}
+Goal Point: {goal}
+Horizontal Barriers: {horizontal_barriers}
+Vertical Barriers: {vertical_barriers}
+<|eot_id|>
+<|start_header_id|>assistant<|end_header_id|>
+"""
+
+cot_gpt_rag = """
+You are provided with a barrier description based on a similar pathfinding problem:
+{retrieved_barrier}
+
+Additionally, you have an example of a successful path for navigating around similar barriers:
+{retrieved_path}
+
+Identify a path between the start and goal points to navigate around obstacles and find the shortest path to the goal. 
+Horizontal barriers are represented as [y, x_start, x_end], and vertical barriers are represented as [x, y_start, y_end].
+Think step by step about how to navigate around the barriers efficiently.
+Conclude your response with the generated path in the format "Generated Path: [[x1, y1], [x2, y2], ...]".
+
+Start Point: {start}
+Goal Point: {goal}
+Horizontal Barriers: {horizontal_barriers}
+Vertical Barriers: {vertical_barriers}
+Thought: 
+"""
+
+cot_llama_rag = """
+<|begin_of_text|>
+<|start_header_id|>system<|end_header_id|>
+You are provided with a barrier description based on a similar pathfinding problem:
+{retrieved_barrier}
+
+Additionally, you have an example of a successful path for navigating around similar barriers:
+{retrieved_path}
+
+You need to find the shortest path between the start and goal points that navigates around barriers. 
+Horizontal barriers are represented as [y, x_start, x_end], and vertical barriers are represented as [x, y_start, y_end].
+Think step by step about how to navigate around the barriers efficiently.
+Conclude your response with the generated path in the format "Generated Path: [[x1, y1], [x2, y2], ...]".
+<|eot_id|>
+<|start_header_id|>user<|end_header_id|>
+Start Point: {start}
+Goal Point: {goal}
+Horizontal Barriers: {horizontal_barriers}
+Vertical Barriers: {vertical_barriers}
+<|eot_id|>
+<|start_header_id|>assistant<|end_header_id|>
+Thought: 
+"""
+
+repe_gpt_rag = """
+You are provided with a barrier description based on a similar pathfinding problem:
+{retrieved_barrier}
+
+Additionally, you have an example of a successful path for navigating around similar barriers:
+{retrieved_path}
+
+Identify a path between the start and goal points to navigate around obstacles and find the shortest path to the goal. 
+Horizontal barriers are represented as [y, x_start, x_end], and vertical barriers are represented as [x, y_start, y_end].
+For each iteration point, analyze the barriers, select a next point, and evaluate your choice.
+Conclude your response with the generated path in the format "Generated Path: [[x1, y1], [x2, y2], ...]".
+
+Start Point: {start}
+Goal Point: {goal}
+Horizontal Barriers: {horizontal_barriers}
+Vertical Barriers: {vertical_barriers}
+- First Iteration on {start}
+Thought: 
+"""
+
+repe_llama_rag = """
+<|begin_of_text|>
+<|start_header_id|>system<|end_header_id|>
+You are provided with a barrier description based on a similar pathfinding problem:
+{retrieved_barrier}
+
+Additionally, you have an example of a successful path for navigating around similar barriers:
+{retrieved_path}
+
+You need to find the shortest path between the start and goal points that navigates around barriers.
+Horizontal barriers are represented as [y, x_start, x_end], and vertical barriers are represented as [x, y_start, y_end].
+For each iteration point, analyze the barriers, select a next point, and evaluate your choice.
+Conclude your response with the generated path in the format "Generated Path: [[x1, y1], [x2, y2], ...]".
+<|eot_id|>
+<|start_header_id|>user<|end_header_id|>
+Start Point: {start}
+Goal Point: {goal}
+Horizontal Barriers: {horizontal_barriers}
+Vertical Barriers: {vertical_barriers}
+<|eot_id|>
+<|start_header_id|>assistant<|end_header_id|>
+- First Iteration on {start}
+Thought: 
+"""
+
+# Update prompt dictionaries to include RAG versions
+gpt_prompt = {'standard': standard_gpt, 'cot': cot_gpt, 'repe': repe_gpt}
 llama_prompt = {'standard': standard_llama, 'cot': cot_llama, 'repe': repe_llama}
+gpt_prompt_rag = {'standard': standard_gpt_rag, 'cot': cot_gpt_rag, 'repe': repe_gpt_rag}
+llama_prompt_rag = {'standard': standard_llama_rag, 'cot': cot_llama_rag, 'repe': repe_llama_rag}
 

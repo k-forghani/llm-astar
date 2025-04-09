@@ -1,12 +1,14 @@
 import json
 import math
 import heapq
+import random
 # import torch
 
 from llmastar.env.search import env, plotting
 from llmastar.model import ChatGPT, Llama3
 from llmastar.utils import is_lines_collision, list_parse
 from .prompt import *
+from .historical_examples import HISTORICAL_EXAMPLES
 
 class LLMAStar:
     """LLM-A* algorithm with cost + heuristics as the priority."""
@@ -14,7 +16,7 @@ class LLMAStar:
     GPT_METHOD = "PARSE"
     GPT_LLMASTAR_METHOD = "LLM-A*"
 
-    def __init__(self, llm='gpt', prompt='standard', device=None):
+    def __init__(self, llm='gpt', prompt='standard', device=None, use_rag=True):
         if device is None:
             device=torch.device("cuda:0")
         self.llm = llm
@@ -28,6 +30,39 @@ class LLMAStar:
         
         assert prompt in ['standard', 'cot', 'repe'], "Invalid prompt type. Choose 'standard', 'cot', or 'repe'."
         self.prompt = prompt
+        self.use_rag = use_rag
+
+    def _calculate_similarity(self, example, start, goal, horizontal_barriers, vertical_barriers):
+        """Calculate similarity between current problem and historical example."""
+        # Barrier count similarity
+        h_barrier_diff = abs(len(horizontal_barriers) - len(example["horizontal_barriers"]))
+        v_barrier_diff = abs(len(vertical_barriers) - len(example["vertical_barriers"]))
+        barrier_similarity = 1.0 / (1.0 + h_barrier_diff + v_barrier_diff)
+        
+        # Start/goal distance similarity
+        example_distance = math.hypot(example["goal"][0] - example["start"][0], example["goal"][1] - example["start"][1])
+        current_distance = math.hypot(goal[0] - start[0], goal[1] - start[1])
+        distance_ratio = min(example_distance, current_distance) / max(example_distance, current_distance)
+        
+        # Combined similarity score (weighted average)
+        return 0.7 * barrier_similarity + 0.3 * distance_ratio
+
+    def _retrieve_relevant_examples(self, start, goal, horizontal_barriers, vertical_barriers):
+        """Retrieve relevant historical examples based on similarity to current problem."""
+        if not self.use_rag or not HISTORICAL_EXAMPLES:
+            return None
+        
+        # Calculate similarity scores for all examples
+        similarities = [
+            (i, self._calculate_similarity(example, start, goal, horizontal_barriers, vertical_barriers))
+            for i, example in enumerate(HISTORICAL_EXAMPLES)
+        ]
+        
+        # Sort by similarity score (descending)
+        similarities.sort(key=lambda x: x[1], reverse=True)
+        
+        # Return the most similar example
+        return HISTORICAL_EXAMPLES[similarities[0][0]]
 
     def _parse_query(self, query):
         """Parse input query using the specified LLM model."""
@@ -67,7 +102,7 @@ class LLMAStar:
     def _initialize_llm_paths(self):
         """Initialize paths using LLM suggestions."""
         start, goal = list(self.s_start), list(self.s_goal)
-        query = self._generate_llm_query(start, goal)
+        query = self._generate_llm_query(start, goal, self.horizontal_barriers, self.vertical_barriers)
 
         if self.llm == 'gpt':
             response = self.model.ask(prompt=query, max_tokens=1000)
@@ -88,16 +123,44 @@ class LLMAStar:
         self.s_target = self.target_list[1]
         print(self.target_list[0], self.s_target)
 
-    def _generate_llm_query(self, start, goal):
-        """Generate the query for the LLM."""
+    def _generate_llm_query(self, start, goal, horizontal_barriers, vertical_barriers):
+        """Generate the query for the LLM with RAG."""
+        retrieved_example = self._retrieve_relevant_examples(start, goal, horizontal_barriers, vertical_barriers)
+        
         if self.llm == 'gpt':
-            return gpt_prompt[self.prompt].format(start=start, goal=goal,
-                                horizontal_barriers=self.horizontal_barriers,
-                                vertical_barriers=self.vertical_barriers)
+            if retrieved_example and self.use_rag:
+                return gpt_prompt_rag[self.prompt].format(
+                    start=start,
+                    goal=goal,
+                    horizontal_barriers=horizontal_barriers,
+                    vertical_barriers=vertical_barriers,
+                    retrieved_barrier=retrieved_example["barrier_description"],
+                    retrieved_path=retrieved_example["path_description"]
+                )
+            else:
+                return gpt_prompt[self.prompt].format(
+                    start=start,
+                    goal=goal,
+                    horizontal_barriers=horizontal_barriers,
+                    vertical_barriers=vertical_barriers
+                )
         elif self.llm == 'llama':
-            return llama_prompt[self.prompt].format(start=start, goal=goal,
-                                    horizontal_barriers=self.horizontal_barriers,
-                                    vertical_barriers=self.vertical_barriers)
+            if retrieved_example and self.use_rag:
+                return llama_prompt_rag[self.prompt].format(
+                    start=start,
+                    goal=goal,
+                    horizontal_barriers=horizontal_barriers,
+                    vertical_barriers=vertical_barriers,
+                    retrieved_barrier=retrieved_example["barrier_description"],
+                    retrieved_path=retrieved_example["path_description"]
+                )
+            else:
+                return llama_prompt[self.prompt].format(
+                    start=start,
+                    goal=goal,
+                    horizontal_barriers=horizontal_barriers,
+                    vertical_barriers=vertical_barriers
+                )
 
     def _filter_valid_nodes(self, nodes):
         """Filter out invalid nodes based on environment constraints."""
