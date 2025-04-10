@@ -43,7 +43,7 @@ class LLMAStar:
                 print(response)
                 return json.loads(response)
             elif self.llm == 'qwen':
-                response = self.model.ask(parse_llama.format(query=query))
+                response = self.model.ask(parse_qwen.format(query=query))
                 print(response)
                 return json.loads(response)
             else:
@@ -107,7 +107,7 @@ class LLMAStar:
                                     horizontal_barriers=self.horizontal_barriers,
                                     vertical_barriers=self.vertical_barriers)
         elif self.llm == 'qwen':
-            return llama_prompt[self.prompt].format(start=start, goal=goal,
+            return qwen_prompt[self.prompt].format(start=start, goal=goal,
                                     horizontal_barriers=self.horizontal_barriers,
                                     vertical_barriers=self.vertical_barriers)
 
