@@ -168,7 +168,7 @@ class LLMAStar:
             "llm_output": self.target_list
         }
         print(result)
-        self.plot.animation(path, visited, True, "LLM-A*", self.filepath)
+        self.plot.animation_with_waypoints(path, visited, self.target_list, True, "LLM-A*", self.filepath)
         return result
 
     @staticmethod
