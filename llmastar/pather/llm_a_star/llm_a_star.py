@@ -4,7 +4,7 @@ import heapq
 # import torch
 
 from llmastar.env.search import env, plotting
-from llmastar.model import ChatGPT, Llama3, Mistral, QwenMath
+from llmastar.model import ChatGPT, Llama3, Mistral, QwenMath, DeepSeek
 from llmastar.utils import is_lines_collision, list_parse
 from .prompt import *
 
@@ -27,8 +27,11 @@ class LLMAStar:
             self.model = Mistral()
         elif self.llm == 'qwen-math':
             self.model = QwenMath(device=device)
+        elif self.llm == 'deepseek':
+            self.model = DeepSeek(device=device, variant=variant)
+
         else:
-            raise ValueError("Invalid LLM model. Choose 'gpt', 'llama', 'mistral', or 'qwen-math'.")
+            raise ValueError("Invalid LLM model. Choose 'gpt', 'llama', 'mistral', 'deepseek' or 'qwen-math'.")
         
         assert prompt in ['standard', 'cot', 'repe'], "Invalid prompt type. Choose 'standard', 'cot', or 'repe'."
         self.prompt = prompt
@@ -40,7 +43,7 @@ class LLMAStar:
                 response = self.parser.chat(query)
                 print(response)
                 return json.loads(response)
-            elif self.llm in ['llama', 'mistral', 'qwen-math']:
+            elif self.llm in ['llama', 'mistral', 'qwen-math','deepseek']:
                 response = self.model.ask(parse_llama.format(query=query))
                 print(response)
                 return json.loads(response)
