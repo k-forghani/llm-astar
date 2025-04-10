@@ -34,6 +34,29 @@ class Plotting:
             plt.show()
         plt.close()
         
+    def animation_with_waypoints(self, path, visited, waypoints, show, name, filepath):
+        plt.clf()
+        self.plot_grid(name)
+        self.plot_visited(visited)
+        if path:
+            self.plot_path(path)
+        if waypoints:
+            self.plot_waypoints(waypoints)
+        plt.savefig(filepath)
+        if show:
+            plt.show()
+        plt.close()
+        
+    def plot_waypoints(self, waypoints):
+        """
+        Plot waypoints as yellow stars
+        
+        Args:
+            waypoints: List of waypoints [(x1, y1), (x2, y2), ...]
+        """
+        waypoints_x = [w[0] for w in waypoints]
+        waypoints_y = [w[1] for w in waypoints]
+        plt.scatter(waypoints_x, waypoints_y, color='yellow', marker='*', s=120, zorder=3, edgecolors='black')
 
     def animation_lrta(self, path, visited, name):
         self.plot_grid(name)
