@@ -6,8 +6,7 @@ class Llama3:
     if device is None:
       device = torch.device("cuda:0")
     # model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
-    # model_id = "meta-llama/Llama-3.2-3B-Instruct"
-    model_id = "Qwen/Qwen2.5-7B-Instruct"
+    model_id = "meta-llama/Llama-3.2-3B-Instruct"
     self.pipeline = transformers.pipeline(
         "text-generation",
         model=model_id,
