@@ -1,10 +1,10 @@
 import json
 import math
 import heapq
-# import torch
+import torch
 
 from llmastar.env.search import env, plotting
-from llmastar.model import ChatGPT, Llama3
+from llmastar.model import ChatGPT, Llama3, Qwen
 from llmastar.utils import is_lines_collision, list_parse
 from .prompt import *
 
@@ -23,6 +23,8 @@ class LLMAStar:
             self.model = ChatGPT(method=self.GPT_LLMASTAR_METHOD, sysprompt="", example=None)
         elif self.llm == 'llama':
             self.model = Llama3(device=device)
+        elif self.llm == 'qwen':
+            self.model = Qwen(device=device)
         else:
             raise ValueError("Invalid LLM model. Choose 'gpt' or 'llama'.")
         
@@ -37,6 +39,10 @@ class LLMAStar:
                 print(response)
                 return json.loads(response)
             elif self.llm == 'llama':
+                response = self.model.ask(parse_llama.format(query=query))
+                print(response)
+                return json.loads(response)
+            elif self.llm == 'qwen':
                 response = self.model.ask(parse_llama.format(query=query))
                 print(response)
                 return json.loads(response)
@@ -73,6 +79,8 @@ class LLMAStar:
             response = self.model.ask(prompt=query, max_tokens=1000)
         elif self.llm == 'llama':
             response = self.model.ask(prompt=query)
+        elif self.llm == 'qwen':
+            response = self.model.ask(prompt=query)
         else:
             raise ValueError("Invalid LLM model.")
 
@@ -98,6 +106,11 @@ class LLMAStar:
             return llama_prompt[self.prompt].format(start=start, goal=goal,
                                     horizontal_barriers=self.horizontal_barriers,
                                     vertical_barriers=self.vertical_barriers)
+        elif self.llm == 'qwen':
+            return llama_prompt[self.prompt].format(start=start, goal=goal,
+                                    horizontal_barriers=self.horizontal_barriers,
+                                    vertical_barriers=self.vertical_barriers)
+
 
     def _filter_valid_nodes(self, nodes):
         """Filter out invalid nodes based on environment constraints."""

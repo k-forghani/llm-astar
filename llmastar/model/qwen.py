@@ -1,7 +1,7 @@
 import transformers
 import torch
 
-class Llama3:
+class Qwen:
   def __init__(self, device=None):
     if device is None:
       device = torch.device("cuda:0")
