@@ -1,68 +1,40 @@
 import json
 import math
 import heapq
-import random
 import torch
 
 from llmastar.env.search import env, plotting
-from llmastar.model import ChatGPT, Llama3
+from llmastar.model import ChatGPT, Llama3, Qwen, RAG
 from llmastar.utils import is_lines_collision, list_parse
-from .prompt import *
-from .historical_examples import HISTORICAL_EXAMPLES
 
 class LLMAStar:
     """LLM-A* algorithm with cost + heuristics as the priority."""
     
-    GPT_METHOD = "PARSE"
-    GPT_LLMASTAR_METHOD = "LLM-A*"
+    GPT_METHOD_PARSE = "PARSE"
+    GPT_METHOD_LLMASTAR = "LLM-A*"
 
-    def __init__(self, llm='gpt', prompt='standard', device=None, use_rag=True):
+    def __init__(self, llm='qwen', variant='Qwen2.5-7B-Instruct', prompt='standard', device=None, use_rag=False, dataset_path='dataset_sft/environment_50_30.json'):
         if device is None:
             device=torch.device("cuda:0")
         self.llm = llm
-        if self.llm == 'gpt':
-            self.parser = ChatGPT(method=self.GPT_METHOD, sysprompt=sysprompt_parse, example=example_parse)
-            self.model = ChatGPT(method=self.GPT_LLMASTAR_METHOD, sysprompt="", example=None)
-        elif self.llm == 'llama':
-            self.model = Llama3(device=device)
-        else:
-            raise ValueError("Invalid LLM model. Choose 'gpt' or 'llama'.")
-        
-        assert prompt in ['standard', 'cot', 'repe'], "Invalid prompt type. Choose 'standard', 'cot', or 'repe'."
-        self.prompt = prompt
+        self.prompt_type = prompt
         self.use_rag = use_rag
-
-    def _calculate_similarity(self, example, start, goal, horizontal_barriers, vertical_barriers):
-        """Calculate similarity between current problem and historical example."""
-        # Barrier count similarity
-        h_barrier_diff = abs(len(horizontal_barriers) - len(example["horizontal_barriers"]))
-        v_barrier_diff = abs(len(vertical_barriers) - len(example["vertical_barriers"]))
-        barrier_similarity = 1.0 / (1.0 + h_barrier_diff + v_barrier_diff)
         
-        # Start/goal distance similarity
-        example_distance = math.hypot(example["goal"][0] - example["start"][0], example["goal"][1] - example["start"][1])
-        current_distance = math.hypot(goal[0] - start[0], goal[1] - start[1])
-        distance_ratio = min(example_distance, current_distance) / max(example_distance, current_distance)
+        # Initialize RAG if enabled
+        if self.use_rag:
+            self.rag = RAG(dataset_path=dataset_path)
         
-        # Combined similarity score (weighted average)
-        return 0.7 * barrier_similarity + 0.3 * distance_ratio
-
-    def _retrieve_relevant_examples(self, start, goal, horizontal_barriers, vertical_barriers):
-        """Retrieve relevant historical examples based on similarity to current problem."""
-        if not self.use_rag or not HISTORICAL_EXAMPLES:
-            return None
+        assert self.prompt_type in ['standard', 'cot', 'repe'], "Invalid prompt type. Choose 'standard', 'cot', or 'repe'."
         
-        # Calculate similarity scores for all examples
-        similarities = [
-            (i, self._calculate_similarity(example, start, goal, horizontal_barriers, vertical_barriers))
-            for i, example in enumerate(HISTORICAL_EXAMPLES)
-        ]
-        
-        # Sort by similarity score (descending)
-        similarities.sort(key=lambda x: x[1], reverse=True)
-        
-        # Return the most similar example
-        return HISTORICAL_EXAMPLES[similarities[0][0]]
+        if self.llm == 'gpt':
+            self.parser = ChatGPT(method=self.GPT_METHOD_PARSE)
+            self.model = ChatGPT(method=self.GPT_METHOD_LLMASTAR)
+        elif self.llm == 'llama':
+            self.model = Llama3(device=device, variant=variant)
+        elif self.llm == 'qwen':
+            self.model = Qwen(device=device, variant=variant)
+        else:
+            raise ValueError("Invalid LLM model. Choose 'gpt', 'llama', or 'qwen'.")
 
     def _parse_query(self, query):
         """Parse input query using the specified LLM model."""
@@ -72,7 +44,11 @@ class LLMAStar:
                 print(response)
                 return json.loads(response)
             elif self.llm == 'llama':
-                response = self.model.ask(parse_llama.format(query=query))
+                response = self.model.ask(self.model.get_prompt("parse", query=query))
+                print(response)
+                return json.loads(response)
+            elif self.llm == 'qwen':
+                response = self.model.ask(self.model.get_prompt("parse", query=query))
                 print(response)
                 return json.loads(response)
             else:
@@ -102,12 +78,80 @@ class LLMAStar:
     def _initialize_llm_paths(self):
         """Initialize paths using LLM suggestions."""
         start, goal = list(self.s_start), list(self.s_goal)
-        query = self._generate_llm_query(start, goal, self.horizontal_barriers, self.vertical_barriers)
+        prompt_params = {
+            'start': start, 
+            'goal': goal,
+            'horizontal_barriers': self.horizontal_barriers,
+            'vertical_barriers': self.vertical_barriers
+        }
+
+        # Enhance prompt with RAG if enabled
+        rag_examples = ""
+        if self.use_rag:
+            # Create a query dict for RAG
+            rag_query = {
+                'start': start,
+                'goal': goal,
+                'horizontal_barriers': self.horizontal_barriers,
+                'vertical_barriers': self.vertical_barriers,
+                'range_x': self.range_x,
+                'range_y': self.range_y,
+                'start_goal': [
+                    {
+                        'start': start,
+                        'goal': goal,
+                        # Use waypoints_intelligent key for RAG similarity
+                    }
+                ]
+            }
+            
+            # Retrieve similar examples
+            examples = self.rag.retrieve_examples(rag_query, top_k=3)
+            
+            # Format examples for the prompt
+            if examples:
+                rag_examples = self.rag.format_examples_for_prompt(examples)
+                print("RAG examples found:", len(examples))
+                print("RAGGGG:", rag_examples)
+            else:
+                print("No RAG examples found")
 
         if self.llm == 'gpt':
+            # For GPT, we need to manually format the prompt
+            from llmastar.model.prompts.gpt_prompts import GPT_PROMPTS
+            query = GPT_PROMPTS[self.prompt_type].format(**prompt_params)
+            
+            # Add RAG examples if available
+            if self.use_rag and rag_examples:
+                query = query + rag_examples
+                
             response = self.model.ask(prompt=query, max_tokens=1000)
         elif self.llm == 'llama':
-            response = self.model.ask(prompt=query)
+            # For Llama, we use the get_prompt method
+            prompt = self.model.get_prompt(self.prompt_type, **prompt_params)
+            
+            # Add RAG examples if available
+            if self.use_rag and rag_examples:
+                prompt_parts = prompt.split("<|eot_id|>")
+                # Insert RAG examples before the last assistant part
+                if len(prompt_parts) >= 3:
+                    prompt_parts[-2] = prompt_parts[-2] + rag_examples
+                    prompt = "<|eot_id|>".join(prompt_parts)
+                
+            response = self.model.ask(prompt)
+        elif self.llm == 'qwen':
+            # For Qwen, we use the get_prompt method
+            prompt = self.model.get_prompt(self.prompt_type, **prompt_params)
+            
+            # Add RAG examples if available
+            if self.use_rag and rag_examples:
+                prompt_parts = prompt.split("<|eot_id|>")
+                # Insert RAG examples before the last assistant part
+                if len(prompt_parts) >= 3:
+                    prompt_parts[-2] = prompt_parts[-2] + rag_examples
+                    prompt = "<|eot_id|>".join(prompt_parts)
+                
+            response = self.model.ask(prompt)
         else:
             raise ValueError("Invalid LLM model.")
 
@@ -122,45 +166,6 @@ class LLMAStar:
         self.i = 1
         self.s_target = self.target_list[1]
         print(self.target_list[0], self.s_target)
-
-    def _generate_llm_query(self, start, goal, horizontal_barriers, vertical_barriers):
-        """Generate the query for the LLM with RAG."""
-        retrieved_example = self._retrieve_relevant_examples(start, goal, horizontal_barriers, vertical_barriers)
-        
-        if self.llm == 'gpt':
-            if retrieved_example and self.use_rag:
-                return gpt_prompt_rag[self.prompt].format(
-                    start=start,
-                    goal=goal,
-                    horizontal_barriers=horizontal_barriers,
-                    vertical_barriers=vertical_barriers,
-                    retrieved_barrier=retrieved_example["barrier_description"],
-                    retrieved_path=retrieved_example["path_description"]
-                )
-            else:
-                return gpt_prompt[self.prompt].format(
-                    start=start,
-                    goal=goal,
-                    horizontal_barriers=horizontal_barriers,
-                    vertical_barriers=vertical_barriers
-                )
-        elif self.llm == 'llama':
-            if retrieved_example and self.use_rag:
-                return llama_prompt_rag[self.prompt].format(
-                    start=start,
-                    goal=goal,
-                    horizontal_barriers=horizontal_barriers,
-                    vertical_barriers=vertical_barriers,
-                    retrieved_barrier=retrieved_example["barrier_description"],
-                    retrieved_path=retrieved_example["path_description"]
-                )
-            else:
-                return llama_prompt[self.prompt].format(
-                    start=start,
-                    goal=goal,
-                    horizontal_barriers=horizontal_barriers,
-                    vertical_barriers=vertical_barriers
-                )
 
     def _filter_valid_nodes(self, nodes):
         """Filter out invalid nodes based on environment constraints."""
@@ -218,7 +223,7 @@ class LLMAStar:
             "llm_output": self.target_list
         }
         print(result)
-        self.plot.animation(path, visited, True, "LLM-A*", self.filepath)
+        self.plot.animation_with_waypoints(path, visited, self.target_list, True, "LLM-A*", self.filepath)
         return result
 
     @staticmethod
