@@ -1,3 +1,38 @@
+PARSE_DEEPSEEK = """
+Given the following query: "{query}", extract a structured JSON in the form:
+{{
+  "start": [x1, y1],
+  "goal": [x2, y2],
+  "range_x": [min_x, max_x],
+  "range_y": [min_y, max_y],
+  "horizontal_barriers": [[y, x_start, x_end], ...],
+  "vertical_barriers": [[x, y_start, y_end], ...]
+}}
+"""
+
+DEEPSEEK_PROMPTS = {
+    "standard": """
+Given:
+- Start: {start}
+- Goal: {goal}
+- Horizontal Barriers: {horizontal_barriers}
+- Vertical Barriers: {vertical_barriers}
+
+Return a JSON list of coordinates to get from start to goal, avoiding the barriers.
+""",
+    "cot": """
+Think step by step.
+Start: {start}
+Goal: {goal}
+Obstacles: Horizontal {horizontal_barriers}, Vertical {vertical_barriers}
+Then output only the list of coordinates from start to goal in JSON.
+""",
+    "repe": """
+Repeat the path planning from {start} to {goal} considering obstacles: Horizontal {horizontal_barriers}, Vertical {vertical_barriers}.
+List the steps as coordinates in JSON format.
+"""
+}
+
 sysprompt_parse = """You are a code generation assistant. Your task is to convert natural language descriptions of pathfinding problems into structured JSON objects that can be used as input for a pathfinding algorithm. The input will describe start and goal points, horizontal and vertical barriers, and the boundaries of the environment. 
 
 For each input, extract the following information and format it into a JSON object:
