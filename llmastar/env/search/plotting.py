@@ -23,16 +23,20 @@ class Plotting:
             plt.show()
         plt.close()
 
-    def animation(self, path, visited, show, name, filepath):
-        plt.clf()
-        self.plot_grid(name)
-        self.plot_visited(visited)
-        if path:
-            self.plot_path(path)
+    def animation(self, path, visited, show, name, filepath=None):
+    plt.clf()
+    self.plot_grid(name)
+    self.plot_visited(visited)
+    if path:
+        self.plot_path(path)
+    
+    if filepath:  # ← only save if filepath is provided
         plt.savefig(filepath)
-        if show:
-            plt.show()
-        plt.close()
+        
+    if show:
+        plt.show()
+    plt.close()
+
         
     def animation_with_waypoints(self, path, visited, waypoints, show, name, filepath):
         plt.clf()
