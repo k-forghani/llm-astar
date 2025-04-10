@@ -6,30 +6,30 @@ import torch
 from llmastar.env.search import env, plotting
 from llmastar.model import ChatGPT, Llama3, Qwen
 from llmastar.utils import is_lines_collision, list_parse
-from .prompt import *
 
 class LLMAStar:
     """LLM-A* algorithm with cost + heuristics as the priority."""
     
-    GPT_METHOD = "PARSE"
-    GPT_LLMASTAR_METHOD = "LLM-A*"
+    GPT_METHOD_PARSE = "PARSE"
+    GPT_METHOD_LLMASTAR = "LLM-A*"
 
-    def __init__(self, llm='gpt', prompt='standard', device=None):
+    def __init__(self, llm='qwen', variant='Qwen2.5-7B-Instruct', prompt='standard', device=None):
         if device is None:
             device=torch.device("cuda:0")
         self.llm = llm
-        if self.llm == 'gpt':
-            self.parser = ChatGPT(method=self.GPT_METHOD, sysprompt=sysprompt_parse, example=example_parse)
-            self.model = ChatGPT(method=self.GPT_LLMASTAR_METHOD, sysprompt="", example=None)
-        elif self.llm == 'llama':
-            self.model = Llama3(device=device)
-        elif self.llm == 'qwen':
-            self.model = Qwen(device=device)
-        else:
-            raise ValueError("Invalid LLM model. Choose 'gpt' or 'llama'.")
+        self.prompt_type = prompt
         
-        assert prompt in ['standard', 'cot', 'repe'], "Invalid prompt type. Choose 'standard', 'cot', or 'repe'."
-        self.prompt = prompt
+        assert self.prompt_type in ['standard', 'cot', 'repe'], "Invalid prompt type. Choose 'standard', 'cot', or 'repe'."
+        
+        if self.llm == 'gpt':
+            self.parser = ChatGPT(method=self.GPT_METHOD_PARSE)
+            self.model = ChatGPT(method=self.GPT_METHOD_LLMASTAR)
+        elif self.llm == 'llama':
+            self.model = Llama3(device=device, variant=variant)
+        elif self.llm == 'qwen':
+            self.model = Qwen(device=device, variant=variant)
+        else:
+            raise ValueError("Invalid LLM model. Choose 'gpt', 'llama', or 'qwen'.")
 
     def _parse_query(self, query):
         """Parse input query using the specified LLM model."""
@@ -39,11 +39,11 @@ class LLMAStar:
                 print(response)
                 return json.loads(response)
             elif self.llm == 'llama':
-                response = self.model.ask(parse_llama.format(query=query))
+                response = self.model.ask(self.model.get_prompt("parse", query=query))
                 print(response)
                 return json.loads(response)
             elif self.llm == 'qwen':
-                response = self.model.ask(parse_qwen.format(query=query))
+                response = self.model.ask(self.model.get_prompt("parse", query=query))
                 print(response)
                 return json.loads(response)
             else:
@@ -73,14 +73,24 @@ class LLMAStar:
     def _initialize_llm_paths(self):
         """Initialize paths using LLM suggestions."""
         start, goal = list(self.s_start), list(self.s_goal)
-        query = self._generate_llm_query(start, goal)
+        prompt_params = {
+            'start': start, 
+            'goal': goal,
+            'horizontal_barriers': self.horizontal_barriers,
+            'vertical_barriers': self.vertical_barriers
+        }
 
         if self.llm == 'gpt':
+            # For GPT, we need to manually format the prompt
+            from llmastar.model.prompts.gpt_prompts import GPT_PROMPTS
+            query = GPT_PROMPTS[self.prompt_type].format(**prompt_params)
             response = self.model.ask(prompt=query, max_tokens=1000)
         elif self.llm == 'llama':
-            response = self.model.ask(prompt=query)
+            # For Llama, we use the get_prompt method
+            response = self.model.ask(self.model.get_prompt(self.prompt_type, **prompt_params))
         elif self.llm == 'qwen':
-            response = self.model.ask(prompt=query)
+            # For Qwen, we use the get_prompt method
+            response = self.model.ask(self.model.get_prompt(self.prompt_type, **prompt_params))
         else:
             raise ValueError("Invalid LLM model.")
 
@@ -95,22 +105,6 @@ class LLMAStar:
         self.i = 1
         self.s_target = self.target_list[1]
         print(self.target_list[0], self.s_target)
-
-    def _generate_llm_query(self, start, goal):
-        """Generate the query for the LLM."""
-        if self.llm == 'gpt':
-            return gpt_prompt[self.prompt].format(start=start, goal=goal,
-                                horizontal_barriers=self.horizontal_barriers,
-                                vertical_barriers=self.vertical_barriers)
-        elif self.llm == 'llama':
-            return llama_prompt[self.prompt].format(start=start, goal=goal,
-                                    horizontal_barriers=self.horizontal_barriers,
-                                    vertical_barriers=self.vertical_barriers)
-        elif self.llm == 'qwen':
-            return qwen_prompt[self.prompt].format(start=start, goal=goal,
-                                    horizontal_barriers=self.horizontal_barriers,
-                                    vertical_barriers=self.vertical_barriers)
-
 
     def _filter_valid_nodes(self, nodes):
         """Filter out invalid nodes based on environment constraints."""

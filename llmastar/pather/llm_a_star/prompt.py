@@ -609,4 +609,3 @@ Vertical Barriers: {vertical_barriers}
 """
 
 qwen_prompt = {'standard': standard_qwen, 'cot': cot_qwen, 'repe': repe_qwen}
-

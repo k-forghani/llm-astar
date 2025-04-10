@@ -355,7 +355,7 @@ class Dataset:
                         )
                         
                         # Full visualization with path, visited and waypoints
-                        full_filepath = f"{vis_folder}/path_{env_idx}_{sg_idx}_full_{waypoint_strategy}.png"
+                        full_filepath = f"{vis_folder}/path_{env_idx}_{sg_idx}.png"
                         Env = env_search.Env(
                             environment['range_x'][1], 
                             environment['range_y'][1], 
@@ -445,73 +445,52 @@ class Dataset:
             return [path[i] for i in indices]
             
         elif strategy == 'intelligent':
-            # Intelligent sampling - points closer to barriers are more useful
+            # Line-of-sight based intelligent waypoint selection
+            # Extract barriers and other environment information
             horizontal_barriers = query['horizontal_barriers']
             vertical_barriers = query['vertical_barriers']
             
-            # Calculate distance to nearest barrier for each point
-            distances = []
-            for point in path:
-                min_dist = float('inf')
+            # Line-of-sight check function
+            def has_line_of_sight(p1, p2):
+                # Create a line between the two points
+                line = LineString([(p1[0], p1[1]), (p2[0], p2[1])])
                 
-                # Check horizontal barriers
+                # Check for intersections with horizontal barriers
                 for barrier in horizontal_barriers:
-                    if barrier[1] <= point[0] <= barrier[2]:  # Point is within x range of barrier
-                        dist = abs(point[1] - barrier[0])
-                        min_dist = min(min_dist, dist)
+                    y, x_start, x_end = barrier
+                    barrier_line = LineString([(x_start, y), (x_end, y)])
+                    if line.intersects(barrier_line):
+                        return False
                 
-                # Check vertical barriers
+                # Check for intersections with vertical barriers
                 for barrier in vertical_barriers:
-                    if barrier[1] <= point[1] <= barrier[2]:  # Point is within y range of barrier
-                        dist = abs(point[0] - barrier[0])
-                        min_dist = min(min_dist, dist)
+                    x, y_start, y_end = barrier
+                    barrier_line = LineString([(x, y_start), (x, y_end)])
+                    if line.intersects(barrier_line):
+                        return False
                 
-                distances.append(min_dist)
+                # No intersections found
+                return True
             
-            # Convert distances to weights (closer to barrier = higher weight)
-            weights = [1.0 / (d + 0.1) for d in distances]  # Add small constant to avoid division by zero
+            # Always include start point
+            waypoints = [path[0]]
+            last_waypoint = path[0]
             
-            # Also give weight to points where path changes direction significantly
-            direction_weights = [0] * len(path)
-            for i in range(1, len(path) - 1):
-                prev_dir = (path[i][0] - path[i-1][0], path[i][1] - path[i-1][1])
-                next_dir = (path[i+1][0] - path[i][0], path[i+1][1] - path[i][1])
-                
-                # Calculate dot product to measure direction change
-                dot_product = prev_dir[0] * next_dir[0] + prev_dir[1] * next_dir[1]
-                prev_mag = (prev_dir[0]**2 + prev_dir[1]**2) ** 0.5
-                next_mag = (next_dir[0]**2 + next_dir[1]**2) ** 0.5
-                
-                if prev_mag * next_mag > 0:  # Avoid division by zero
-                    cos_angle = dot_product / (prev_mag * next_mag)
-                    # Convert to a weight (1 for 90-degree turns, 0 for straight lines)
-                    direction_weights[i] = 1 - abs(cos_angle)
+            # Walk along the path and add waypoints where line-of-sight is broken
+            for i in range(1, len(path)):
+                # Check if there's line-of-sight between current point and last waypoint
+                if not has_line_of_sight(last_waypoint, path[i]):
+                    # If line-of-sight is broken, add the previous point as a waypoint
+                    # (unless it's already the last waypoint)
+                    if path[i-1] != last_waypoint:
+                        waypoints.append(path[i-1])
+                        last_waypoint = path[i-1]
             
-            # Combine both weights
-            combined_weights = [w1 + w2 for w1, w2 in zip(weights, direction_weights)]
+            # Always include the goal point (end of path)
+            if waypoints[-1] != path[-1]:
+                waypoints.append(path[-1])
             
-            # Ensure start and end points are included
-            combined_weights[0] = combined_weights[-1] = 0
-            
-            # Select points weighted by their combined score
-            if num_points >= len(path):
-                return path
-            
-            # Create probability distribution
-            probs = np.array(combined_weights)
-            probs = probs / probs.sum()
-            
-            # Sample indices (excluding start and end)
-            middle_indices = np.random.choice(
-                range(1, len(path) - 1),
-                size=min(num_points - 2, len(path) - 2),
-                replace=False,
-                p=probs[1:-1] / probs[1:-1].sum()
-            )
-            
-            # Add start and end points
-            indices = sorted([0] + list(middle_indices) + [len(path) - 1])
-            return [path[i] for i in indices]
+            return waypoints
         
         else:
             raise ValueError(f"Unknown waypoint strategy: {strategy}")
