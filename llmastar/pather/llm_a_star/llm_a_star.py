@@ -4,7 +4,7 @@ import heapq
 # import torch
 
 from llmastar.env.search import env, plotting
-from llmastar.model import ChatGPT, Llama3,mistral
+from llmastar.model import ChatGPT, Llama3, Mistral, QwenMath
 from llmastar.utils import is_lines_collision, list_parse
 from .prompt import *
 
@@ -25,8 +25,10 @@ class LLMAStar:
             self.model = Llama3(device=device) 
         elif self.llm == 'mistral':
             self.model = Mistral()
+        elif self.llm == 'qwen-math':
+            self.model = QwenMath(device=device)
         else:
-            raise ValueError("Invalid LLM model. Choose 'gpt', 'llama', or 'mistral'.")
+            raise ValueError("Invalid LLM model. Choose 'gpt', 'llama', 'mistral', or 'qwen-math'.")
         
         assert prompt in ['standard', 'cot', 'repe'], "Invalid prompt type. Choose 'standard', 'cot', or 'repe'."
         self.prompt = prompt
@@ -38,13 +40,10 @@ class LLMAStar:
                 response = self.parser.chat(query)
                 print(response)
                 return json.loads(response)
-            elif self.llm == 'llama':
+            elif self.llm in ['llama', 'mistral', 'qwen-math']:
                 response = self.model.ask(parse_llama.format(query=query))
                 print(response)
                 return json.loads(response)
-            elif self.llm == 'mistral':
-                response = self.model.ask(parse_llama.format(query=query))
-                print(response)
             else:
                 raise ValueError("Invalid LLM model.")
         return query
@@ -74,11 +73,7 @@ class LLMAStar:
         start, goal = list(self.s_start), list(self.s_goal)
         query = self._generate_llm_query(start, goal)
 
-        if self.llm == 'gpt':
-            response = self.model.ask(prompt=query, max_tokens=1000)
-        elif self.llm == 'llama':
-            response = self.model.ask(prompt=query)
-        elif self.llm == 'mistral':
+        if self.llm in ['gpt', 'llama', 'mistral', 'qwen-math']:
             response = self.model.ask(prompt=query)
         else:
             raise ValueError("Invalid LLM model.")
@@ -97,19 +92,11 @@ class LLMAStar:
 
     def _generate_llm_query(self, start, goal):
         """Generate the query for the LLM."""
-        if self.llm == 'gpt':
-            return gpt_prompt[self.prompt].format(start=start, goal=goal,
-                                horizontal_barriers=self.horizontal_barriers,
-                                vertical_barriers=self.vertical_barriers)
-        elif self.llm == 'llama':
-            return llama_prompt[self.prompt].format(start=start, goal=goal,
-                                    horizontal_barriers=self.horizontal_barriers,
-                                    vertical_barriers=self.vertical_barriers)
-
-        elif self.llm == 'mistral':
-            return llama_prompt[self.prompt].format(start=start, goal=goal,
-                                    horizontal_barriers=self.horizontal_barriers,
-                                    vertical_barriers=self.vertical_barriers)
+        return llama_prompt[self.prompt].format(
+            start=start, goal=goal,
+            horizontal_barriers=self.horizontal_barriers,
+            vertical_barriers=self.vertical_barriers
+        )
 
     def _filter_valid_nodes(self, nodes):
         """Filter out invalid nodes based on environment constraints."""
@@ -119,10 +106,7 @@ class LLMAStar:
                 and self.range_y[0] + 1 < node[1] < self.range_y[1] - 1]
 
     def searching(self, query, filepath='temp.png'):
-        """
-        A* searching algorithm.
-        :return: Path and search metrics.
-        """
+        """A* searching algorithm."""
         self.filepath = filepath
         print(query)
         input_data = self._parse_query(query)
@@ -137,23 +121,23 @@ class LLMAStar:
             _, s = heapq.heappop(self.OPEN)
             self.CLOSED.append(s)
 
-            if s == self.s_goal:  # stop condition
+            if s == self.s_goal:
                 break
 
             for s_n in self.get_neighbor(s):
-                if s_n == self.s_target and self.s_goal != self.s_target :
+                if s_n == self.s_target and self.s_goal != self.s_target:
                     self._update_target()
                     self._update_queue()
                     print(s_n, self.s_target)
-                    
+
                 if s_n in self.CLOSED:
                     continue
 
                 new_cost = self.g[s] + self.cost(s, s_n)
                 if s_n not in self.g:
                     self.g[s_n] = math.inf
-                    
-                if new_cost < self.g[s_n]:  # conditions for updating Cost
+
+                if new_cost < self.g[s_n]:
                     self.g[s_n] = new_cost
                     self.PARENT[s_n] = s
                     heapq.heappush(self.OPEN, (self.f_value(s_n), s_n))
@@ -198,9 +182,9 @@ class LLMAStar:
         """Check if the line segment (s_start, s_end) collides with any barriers."""
         line1 = [s_start, s_end]
         return any(is_lines_collision(line1, [[h[1], h[0]], [h[2], h[0]]]) for h in self.horizontal_barriers) or \
-                any(is_lines_collision(line1, [[v[0], v[1]], [v[0], v[2]]]) for v in self.vertical_barriers) or \
-                any(is_lines_collision(line1, [[x, self.range_y[0]], [x, self.range_y[1]]]) for x in self.range_x) or \
-                any(is_lines_collision(line1, [[self.range_x[0], y], [self.range_x[1], y]]) for y in self.range_y)
+               any(is_lines_collision(line1, [[v[0], v[1]], [v[0], v[2]]]) for v in self.vertical_barriers) or \
+               any(is_lines_collision(line1, [[x, self.range_y[0]], [x, self.range_y[1]]]) for x in self.range_x) or \
+               any(is_lines_collision(line1, [[self.range_x[0], y], [self.range_x[1], y]]) for y in self.range_y)
 
     def f_value(self, s):
         """Compute the f-value for state s."""
@@ -216,4 +200,3 @@ class LLMAStar:
     def heuristic(self, s):
         """Calculate heuristic value."""
         return math.hypot(self.s_goal[0] - s[0], self.s_goal[1] - s[1]) + math.hypot(self.s_target[0] - s[0], self.s_target[1] - s[1])
-
