@@ -1,9 +1,10 @@
+
 import transformers
 import torch
-from .prompts.qwen_prompts import PARSE_QWEN, QWEN_PROMPTS 
+from .prompts.deepseek_prompts import PARSE_DEEPSEEK, DEEPSEEK_PROMPTS
 
-class DeepSeekCoder:
-    def __init__(self, variant="deepseek-coder-6.7b-instruct", device=None):
+class DeepSeek:
+    def __init__(self, variant="DeepSeek-R1-Distill-Llama-8B", device=None):
         if device is None:
             device = torch.device("cuda:0")
         
@@ -16,8 +17,7 @@ class DeepSeekCoder:
             device=device,
         )
         self.terminators = [
-            self.pipeline.tokenizer.eos_token_id,
-            self.pipeline.tokenizer.convert_tokens_to_ids("<|im_end|>")
+            self.pipeline.tokenizer.eos_token_id
         ]
     
     def ask(self, prompt):
@@ -31,11 +31,12 @@ class DeepSeekCoder:
             pad_token_id=self.pipeline.tokenizer.eos_token_id
         )
         return outputs[0]["generated_text"][len(prompt):]
-
+        
     def get_prompt(self, prompt_type, **kwargs):
+        """Get a prompt template and format it with the provided parameters."""
         if prompt_type == "parse":
-            return PARSE_QWEN.format(**kwargs)
-        elif prompt_type in QWEN_PROMPTS:
-            return QWEN_PROMPTS[prompt_type].format(**kwargs)
+            return PARSE_DEEPSEEK.format(**kwargs)
+        elif prompt_type in DEEPSEEK_PROMPTS:
+            return DEEPSEEK_PROMPTS[prompt_type].format(**kwargs)
         else:
             raise ValueError(f"Unknown prompt type: {prompt_type}")
