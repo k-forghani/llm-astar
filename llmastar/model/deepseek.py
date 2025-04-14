@@ -21,8 +21,8 @@ class DeepSeek:
             None
         """
         self.use_api = use_api
-        self.model_id = f"deepseek-ai/{variant}"
-        self.openrouter_model = f"deepseek-ai/{variant}"
+        self.model_id = f"deepseek/{variant}"
+        self.openrouter_model = f"deepseek/{variant}"
         
         if use_api:
             self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY")
