@@ -4,7 +4,7 @@ import heapq
 import torch
 
 from llmastar.env.search import env, plotting
-from llmastar.model import ChatGPT, Llama3, Qwen
+from llmastar.model import ChatGPT, Llama3, Mistral, DeepSeek, Qwen
 from llmastar.utils import is_lines_collision, list_parse
 
 class LLMAStar:
@@ -25,11 +25,17 @@ class LLMAStar:
             self.parser = ChatGPT(method=self.GPT_METHOD_PARSE)
             self.model = ChatGPT(method=self.GPT_METHOD_LLMASTAR)
         elif self.llm == 'llama':
-            self.model = Llama3(device=device, variant=variant)
+            self.model = Llama3(device=device)
+        elif self.llm == 'mistral':
+            self.model = Mistral()
+        elif self.llm == 'deepseek':
+            self.model = DeepSeek(device=device, variant=variant)
         elif self.llm == 'qwen':
             self.model = Qwen(device=device, variant=variant)
-        else:
-            raise ValueError("Invalid LLM model. Choose 'gpt', 'llama', or 'qwen'.")
+            raise ValueError("Invalid LLM model. Choose 'gpt' or 'llama'.")
+        
+        assert prompt in ['standard', 'cot', 'repe'], "Invalid prompt type. Choose 'standard', 'cot', or 'repe'."
+        self.prompt = prompt
 
     def _parse_query(self, query):
         """Parse input query using the specified LLM model."""
@@ -39,11 +45,7 @@ class LLMAStar:
                 print(response)
                 return json.loads(response)
             elif self.llm == 'llama':
-                response = self.model.ask(self.model.get_prompt("parse", query=query))
-                print(response)
-                return json.loads(response)
-            elif self.llm == 'qwen':
-                response = self.model.ask(self.model.get_prompt("parse", query=query))
+                response = self.model.ask(parse_llama.format(query=query))
                 print(response)
                 return json.loads(response)
             else:
@@ -91,6 +93,10 @@ class LLMAStar:
         elif self.llm == 'qwen':
             # For Qwen, we use the get_prompt method
             response = self.model.ask(self.model.get_prompt(self.prompt_type, **prompt_params))
+        elif self.llm == 'mistral':
+            response = self.model.ask(self.model.get_prompt(self.prompt_type, **prompt_params))
+        elif self.llm == 'deepseek':
+            response = self.model.ask(self.model.get_prompt(self.prompt_type, **prompt_params))
         else:
             raise ValueError("Invalid LLM model.")
 
@@ -114,10 +120,7 @@ class LLMAStar:
                 and self.range_y[0] + 1 < node[1] < self.range_y[1] - 1]
 
     def searching(self, query, filepath='temp.png'):
-        """
-        A* searching algorithm.
-        :return: Path and search metrics.
-        """
+        """A* searching algorithm."""
         self.filepath = filepath
         print(query)
         input_data = self._parse_query(query)
@@ -132,23 +135,23 @@ class LLMAStar:
             _, s = heapq.heappop(self.OPEN)
             self.CLOSED.append(s)
 
-            if s == self.s_goal:  # stop condition
+            if s == self.s_goal:
                 break
 
             for s_n in self.get_neighbor(s):
-                if s_n == self.s_target and self.s_goal != self.s_target :
+                if s_n == self.s_target and self.s_goal != self.s_target:
                     self._update_target()
                     self._update_queue()
                     print(s_n, self.s_target)
-                    
+
                 if s_n in self.CLOSED:
                     continue
 
                 new_cost = self.g[s] + self.cost(s, s_n)
                 if s_n not in self.g:
                     self.g[s_n] = math.inf
-                    
-                if new_cost < self.g[s_n]:  # conditions for updating Cost
+
+                if new_cost < self.g[s_n]:
                     self.g[s_n] = new_cost
                     self.PARENT[s_n] = s
                     heapq.heappush(self.OPEN, (self.f_value(s_n), s_n))
@@ -193,9 +196,9 @@ class LLMAStar:
         """Check if the line segment (s_start, s_end) collides with any barriers."""
         line1 = [s_start, s_end]
         return any(is_lines_collision(line1, [[h[1], h[0]], [h[2], h[0]]]) for h in self.horizontal_barriers) or \
-                any(is_lines_collision(line1, [[v[0], v[1]], [v[0], v[2]]]) for v in self.vertical_barriers) or \
-                any(is_lines_collision(line1, [[x, self.range_y[0]], [x, self.range_y[1]]]) for x in self.range_x) or \
-                any(is_lines_collision(line1, [[self.range_x[0], y], [self.range_x[1], y]]) for y in self.range_y)
+               any(is_lines_collision(line1, [[v[0], v[1]], [v[0], v[2]]]) for v in self.vertical_barriers) or \
+               any(is_lines_collision(line1, [[x, self.range_y[0]], [x, self.range_y[1]]]) for x in self.range_x) or \
+               any(is_lines_collision(line1, [[self.range_x[0], y], [self.range_x[1], y]]) for y in self.range_y)
 
     def f_value(self, s):
         """Compute the f-value for state s."""
@@ -211,4 +214,3 @@ class LLMAStar:
     def heuristic(self, s):
         """Calculate heuristic value."""
         return math.hypot(self.s_goal[0] - s[0], self.s_goal[1] - s[1]) + math.hypot(self.s_target[0] - s[0], self.s_target[1] - s[1])
-
