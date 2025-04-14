@@ -12,13 +12,16 @@ class AStar:
     def __init__(self):
         pass       
 
-    def searching(self, query, filepath='temp.png'):
+    def searching(self, query, filepath='temp.png', llm_output=None):
         """
         A_star Searching.
-        :return: path, visited order
+        :param query: search config
+        :param filepath: path to save output image
+        :param llm_output: optional, list of waypoints from LLM
+        :return: dictionary of results
         """
+        import copy
         query = copy.deepcopy(query)
-
         self.filepath = filepath
         self.s_start = (query['start'][0], query['start'][1])
         self.s_goal = (query['goal'][0], query['goal'][1])
@@ -27,23 +30,22 @@ class AStar:
         self.vertical_barriers = query['vertical_barriers']
         self.range_x = list(query['range_x'])
         self.range_y = list(query['range_y'])
-        self.Env = env.Env(self.range_x[1], self.range_y[1], self.horizontal_barriers, self.vertical_barriers)  # class Env
+    
+        self.Env = env.Env(self.range_x[1], self.range_y[1], self.horizontal_barriers, self.vertical_barriers)
         self.plot = plotting.Plotting(self.s_start, self.s_goal, self.Env)
         self.range_x[1] -= 1
         self.range_y[1] -= 1
-        self.u_set = self.Env.motions  # feasible input set
-        self.obs = self.Env.obs  # position of obstacles
-        self.OPEN = []  # priority queue / OPEN set
-        self.CLOSED = []  # CLOSED set / VISITED order
-        self.PARENT = dict()  # recorded parent
-        self.g = dict()  # cost to come
-        
-        
+        self.u_set = self.Env.motions
+        self.obs = self.Env.obs
+    
+        self.OPEN = []
+        self.CLOSED = []
+        self.PARENT = dict()
+        self.g = dict()
+    
         self.PARENT[self.s_start] = self.s_start
         self.g[self.s_start] = 0
-        # self.g[self.s_goal] = math.inf
-        heapq.heappush(self.OPEN,
-                    (self.f_value(self.s_start), self.s_start))
+        heapq.heappush(self.OPEN, (self.f_value(self.s_start), self.s_start))
         
         count = 0
         while self.OPEN:
@@ -51,34 +53,36 @@ class AStar:
             _, s = heapq.heappop(self.OPEN)
             self.CLOSED.append(s)
             
-            if s == self.s_goal:  # stop condition
+            if s == self.s_goal:
                 break
-
+    
             for s_n in self.get_neighbor(s):                
                 if s_n in self.CLOSED:
                     continue
                 new_cost = self.g[s] + self.cost(s, s_n)
-
+    
                 if s_n not in self.g:
                     self.g[s_n] = math.inf
-
-                if new_cost < self.g[s_n]:  # conditions for updating Cost
+    
+                if new_cost < self.g[s_n]:
                     self.g[s_n] = new_cost
                     self.PARENT[s_n] = s
-
                     heapq.heappush(self.OPEN, (self.f_value(s_n), s_n))
         
         path = self.extract_path(self.PARENT)
         visited = self.CLOSED
         if self.filepath:
             self.plot.animation(path, visited, True, "A*", self.filepath)
+    
         return {
             "path": path,
             "visited": visited,
             "operation": count,
             "storage": len(self.g),
-            "length": sum(self._euclidean_distance(path[i], path[i+1]) for i in range(len(path)-1))
-        } 
+            "length": sum(self._euclidean_distance(path[i], path[i+1]) for i in range(len(path)-1)),
+            "llm_output": llm_output if llm_output is not None else []
+        }
+ 
     
     @staticmethod
     def _euclidean_distance(p1, p2):
