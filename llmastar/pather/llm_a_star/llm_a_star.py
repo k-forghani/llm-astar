@@ -2,6 +2,7 @@ import json
 import math
 import heapq
 import torch
+import os
 
 from llmastar.env.search import env, plotting
 from llmastar.model import ChatGPT, Llama3, Mistral, DeepSeek, Qwen
@@ -13,11 +14,27 @@ class LLMAStar:
     GPT_METHOD_PARSE = "PARSE"
     GPT_METHOD_LLMASTAR = "LLM-A*"
 
-    def __init__(self, llm='qwen', variant='Qwen2.5-7B-Instruct', prompt='standard', device=None):
-        if device is None:
-            device=torch.device("cuda:0")
+    def __init__(self, llm='qwen', variant='Qwen2.5-7B-Instruct', prompt='standard', device=None, 
+                 use_api=False, api_key=None, site_url=None, site_name=None):
+        """
+        Initialize the LLM-A* algorithm.
+        
+        Args:
+            llm (str): The LLM model to use ('gpt', 'llama', 'mistral', 'deepseek', 'qwen').
+            variant (str): The variant of the model to use.
+            prompt (str): The prompt type to use ('standard', 'cot', 'repe').
+            device (torch.device): The device to run the model on for local inference.
+            use_api (bool): Whether to use API calls instead of local inference.
+            api_key (str): API key for OpenRouter. If None, will try to get from environment.
+            site_url (str): Site URL for rankings on OpenRouter.
+            site_name (str): Site name for rankings on OpenRouter.
+        """
+        if device is None and not use_api:
+            device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+            
         self.llm = llm
         self.prompt_type = prompt
+        self.use_api = use_api
         
         assert self.prompt_type in ['standard', 'cot', 'repe'], "Invalid prompt type. Choose 'standard', 'cot', or 'repe'."
         
@@ -25,16 +42,43 @@ class LLMAStar:
             self.parser = ChatGPT(method=self.GPT_METHOD_PARSE)
             self.model = ChatGPT(method=self.GPT_METHOD_LLMASTAR)
         elif self.llm == 'llama':
-            self.model = Llama3(device=device)
+            self.model = Llama3(
+                variant=variant,
+                device=device, 
+                use_api=use_api, 
+                api_key=api_key, 
+                site_url=site_url, 
+                site_name=site_name
+            )
         elif self.llm == 'mistral':
-            self.model = Mistral()
+            self.model = Mistral(
+                model_name=f"mistralai/{variant}" if variant else "mistralai/Mistral-7B-Instruct-v0.1",
+                use_api=use_api, 
+                api_key=api_key, 
+                site_url=site_url, 
+                site_name=site_name
+            )
         elif self.llm == 'deepseek':
-            self.model = DeepSeek(device=device, variant=variant)
+            self.model = DeepSeek(
+                variant=variant,
+                device=device, 
+                use_api=use_api, 
+                api_key=api_key, 
+                site_url=site_url, 
+                site_name=site_name
+            )
         elif self.llm == 'qwen':
-            self.model = Qwen(device=device, variant=variant)
-            raise ValueError("Invalid LLM model. Choose 'gpt' or 'llama'.")
+            self.model = Qwen(
+                variant=variant,
+                device=device, 
+                use_api=use_api, 
+                api_key=api_key, 
+                site_url=site_url, 
+                site_name=site_name
+            )
+        else:
+            raise ValueError("Invalid LLM model. Choose 'gpt', 'llama', 'mistral', 'deepseek', or 'qwen'.")
         
-        assert prompt in ['standard', 'cot', 'repe'], "Invalid prompt type. Choose 'standard', 'cot', or 'repe'."
         self.prompt = prompt
 
     def _parse_query(self, query):
@@ -44,8 +88,9 @@ class LLMAStar:
                 response = self.parser.chat(query)
                 print(response)
                 return json.loads(response)
-            elif self.llm == 'llama':
-                response = self.model.ask(parse_llama.format(query=query))
+            elif self.llm in ['llama', 'mistral', 'deepseek', 'qwen']:
+                parse_prompt = self.model.get_prompt("parse", query=query)
+                response = self.model.ask(parse_prompt)
                 print(response)
                 return json.loads(response)
             else:
@@ -87,18 +132,9 @@ class LLMAStar:
             from llmastar.model.prompts.gpt_prompts import GPT_PROMPTS
             query = GPT_PROMPTS[self.prompt_type].format(**prompt_params)
             response = self.model.ask(prompt=query, max_tokens=1000)
-        elif self.llm == 'llama':
-            # For Llama, we use the get_prompt method
-            response = self.model.ask(self.model.get_prompt(self.prompt_type, **prompt_params))
-        elif self.llm == 'qwen':
-            # For Qwen, we use the get_prompt method
-            response = self.model.ask(self.model.get_prompt(self.prompt_type, **prompt_params))
-        elif self.llm == 'mistral':
-            response = self.model.ask(self.model.get_prompt(self.prompt_type, **prompt_params))
-        elif self.llm == 'deepseek':
-            response = self.model.ask(self.model.get_prompt(self.prompt_type, **prompt_params))
         else:
-            raise ValueError("Invalid LLM model.")
+            # For other models, we use the get_prompt method
+            response = self.model.ask(self.model.get_prompt(self.prompt_type, **prompt_params))
 
         nodes = list_parse(response)
         self.target_list = self._filter_valid_nodes(nodes)
