@@ -5,7 +5,7 @@ import torch
 import os
 
 from llmastar.env.search import env, plotting
-from llmastar.model import ChatGPT, Llama3, Mistral, DeepSeek, Qwen
+from llmastar.model import ChatGPT, Llama3, Qwen, Mistral, DeepSeek, RAG
 from llmastar.utils import is_lines_collision, list_parse
 
 class LLMAStar:
@@ -14,8 +14,8 @@ class LLMAStar:
     GPT_METHOD_PARSE = "PARSE"
     GPT_METHOD_LLMASTAR = "LLM-A*"
 
-    def __init__(self, llm='qwen', variant='Qwen2.5-7B-Instruct', prompt='standard', device=None, 
-                 use_api=False, api_key=None, site_url=None, site_name=None):
+    def __init__(self, llm='qwen', variant='Qwen2.57B-Instruct', prompt='standard', device=None, 
+                 use_api=False, api_key=None, site_url=None, site_name=None, use_rag=False, dataset_path='dataset_sft/environment_50_30.json'):
         """
         Initialize the LLM-A* algorithm.
         
@@ -34,7 +34,11 @@ class LLMAStar:
             
         self.llm = llm
         self.prompt_type = prompt
-        self.use_api = use_api
+        self.use_rag = use_rag
+        
+        # Initialize RAG if enabled
+        if self.use_rag:
+            self.rag = RAG(dataset_path=dataset_path)
         
         assert self.prompt_type in ['standard', 'cot', 'repe'], "Invalid prompt type. Choose 'standard', 'cot', or 'repe'."
         
@@ -127,14 +131,60 @@ class LLMAStar:
             'vertical_barriers': self.vertical_barriers
         }
 
+        # Enhance prompt with RAG if enabled
+        rag_examples = ""
+        if self.use_rag:
+            # Create a query dict for RAG
+            rag_query = {
+                'start': start,
+                'goal': goal,
+                'horizontal_barriers': self.horizontal_barriers,
+                'vertical_barriers': self.vertical_barriers,
+                'range_x': self.range_x,
+                'range_y': self.range_y,
+                'start_goal': [
+                    {
+                        'start': start,
+                        'goal': goal,
+                        # Use waypoints_intelligent key for RAG similarity
+                    }
+                ]
+            }
+            
+            # Retrieve similar examples
+            examples = self.rag.retrieve_examples(rag_query, top_k=3)
+            
+            # Format examples for the prompt
+            if examples:
+                rag_examples = self.rag.format_examples_for_prompt(examples)
+                print("RAG examples found:", len(examples))
+                print("RAGGGG:", rag_examples)
+            else:
+                print("No RAG examples found")
+
         if self.llm == 'gpt':
             # For GPT, we need to manually format the prompt
             from llmastar.model.prompts.gpt_prompts import GPT_PROMPTS
             query = GPT_PROMPTS[self.prompt_type].format(**prompt_params)
+            
+            # Add RAG examples if available
+            if self.use_rag and rag_examples:
+                query = query + rag_examples
+                
             response = self.model.ask(prompt=query, max_tokens=1000)
         else:
-            # For other models, we use the get_prompt method
-            response = self.model.ask(self.model.get_prompt(self.prompt_type, **prompt_params))
+            # For Llama, we use the get_prompt method
+            prompt = self.model.get_prompt(self.prompt_type, **prompt_params)
+            
+            # Add RAG examples if available
+            if self.use_rag and rag_examples:
+                prompt_parts = prompt.split("<|eot_id|>")
+                # Insert RAG examples before the last assistant part
+                if len(prompt_parts) >= 3:
+                    prompt_parts[-2] = prompt_parts[-2] + rag_examples
+                    prompt = "<|eot_id|>".join(prompt_parts)
+                
+            response = self.model.ask(prompt)
 
         nodes = list_parse(response)
         self.target_list = self._filter_valid_nodes(nodes)
